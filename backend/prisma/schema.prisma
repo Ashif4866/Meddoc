@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(uuid())
+  name         String
+  email        String         @unique
+  passwordHash String
+  phone        String?
+  organization String?
+  role         String         @default("HEALTH_OFFICER") // ADMIN, PHARMACY_MANAGER, HEALTH_OFFICER, SUPPLY_CHAIN_MANAGER
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  alerts       Alert[]
+  notifications Notification[]
+  reports      Report[]
+}
+
+model Pharmacy {
+  id                 String         @id @default(uuid())
+  name               String
+  registrationNumber String         @unique
+  address            String
+  city               String
+  district           String
+  state              String
+  latitude           Float
+  longitude          Float
+  status             String         @default("ACTIVE") // ACTIVE, WARNING, SHORTAGE_ALERT, INACTIVE
+  contactNumber      String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  inventories        Inventory[]
+  demandRecords      DemandRecord[]
+  spikes             Spike[]
+  forecasts          Forecast[]
+  alerts             Alert[]
+  insights           AIInsight[]
+}
+
+model Medicine {
+  id            String         @id @default(uuid())
+  name          String
+  genericName   String
+  category      String         // Antipyretic, Antibiotic, Rehydration, Antihistamine, Antidiabetic, Analgesic, Respiratory, Gastrointestinal
+  manufacturer  String
+  unit          String         // Tablets, Strips, Sachets, Vials, Bottles
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  inventories   Inventory[]
+  demandRecords DemandRecord[]
+  spikes        Spike[]
+  forecasts     Forecast[]
+  alerts        Alert[]
+  insights      AIInsight[]
+}
+
+model Inventory {
+  id                 String   @id @default(uuid())
+  pharmacyId         String
+  medicineId         String
+  currentStock       Int
+  reorderLevel       Int
+  dailyAverageDemand Float    @default(0.0)
+  lastUpdated        DateTime @default(now())
+  status             String   @default("OPTIMAL") // OPTIMAL, LOW_STOCK, CRITICAL, OVERSTOCKED
+
+  pharmacy           Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine           Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@unique([pharmacyId, medicineId])
+}
+
+model DemandRecord {
+  id                String   @id @default(uuid())
+  pharmacyId        String
+  medicineId        String
+  date              DateTime
+  quantitySold      Int
+  quantityRequested Int
+  historicalAverage Float
+  expectedDemand    Float
+  anomalyScore      Float    @default(0.0)
+  createdAt         DateTime @default(now())
+
+  pharmacy          Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine          Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([pharmacyId, medicineId, date])
+}
+
+model Spike {
+  id                       String   @id @default(uuid())
+  medicineId               String
+  pharmacyId               String
+  demandIncreasePercentage Float
+  anomalyScore             Float
+  severity                 String   @default("WARNING") // NORMAL, WARNING, HIGH, CRITICAL
+  detectedAt               DateTime @default(now())
+  status                   String   @default("ACTIVE") // ACTIVE, INVESTIGATING, ACKNOWLEDGED, RESOLVED
+  explanation              String
+
+  pharmacy                 Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine                 Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([severity, status])
+}
+
+model Forecast {
+  id              String   @id @default(uuid())
+  medicineId      String
+  pharmacyId      String
+  forecastDate    DateTime
+  predictedDemand Float
+  lowerBound      Float
+  upperBound      Float
+  confidence      Float    @default(0.95)
+  createdAt       DateTime @default(now())
+
+  pharmacy        Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine        Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@index([pharmacyId, medicineId, forecastDate])
+}
+
+model Alert {
+  id          String    @id @default(uuid())
+  userId      String?
+  pharmacyId  String?
+  medicineId  String?
+  type        String    // SPIKE_DETECTED, SHORTAGE_PREDICTED, INVENTORY_CRITICAL, SYNDROMIC_CLUSTER
+  title       String
+  message     String
+  severity    String    @default("WARNING") // WARNING, HIGH, CRITICAL, INFO
+  status      String    @default("UNRESOLVED") // UNRESOLVED, ACKNOWLEDGED, RESOLVED
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  user        User?     @relation(fields: [userId], references: [id])
+  pharmacy    Pharmacy? @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine    Medicine? @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+}
+
+model AIInsight {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  medicineId  String?
+  pharmacyId  String?
+  confidence  Float    @default(0.92)
+  insightType String   @default("ANOMALY_EXPLANATION") // ANOMALY_EXPLANATION, SYNDROMIC_CORRELATION, SHORTAGE_RISK, GEOGRAPHIC_CLUSTER
+  createdAt   DateTime @default(now())
+
+  pharmacy    Pharmacy? @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine    Medicine? @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  alertId   String?
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alert     Alert?   @relation(fields: [alertId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id         String   @id @default(uuid())
+  userId     String
+  reportType String   // HEALTH_OFFICER_BULLETIN, SUPPLY_CHAIN_ADVISORY, EXECUTIVE_SUMMARY, SPIKE_AUDIT
+  startDate  DateTime
+  endDate    DateTime
+  filters    String?  // JSON string
+  fileUrl    String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
