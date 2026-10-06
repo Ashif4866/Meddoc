@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -7,7 +7,7 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-FROM node:22-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
