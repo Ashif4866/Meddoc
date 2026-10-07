@@ -1,4 +1,4 @@
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = 'https://meddoc-backend-5ny3.onrender.com/api';
 
 export const getAuthToken = (): string | null => {
   return localStorage.getItem('meddoc_token') || localStorage.getItem('pharmapulse_token');
